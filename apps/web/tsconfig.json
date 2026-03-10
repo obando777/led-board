@@ -1,0 +1,12 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"],
+      "@led-panel/core": ["../../packages/core/src/index.ts"]
+    }
+  },
+  "include": ["src", "../../packages/core/src"]
+}

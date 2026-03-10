@@ -1,0 +1,36 @@
+{
+  "expo": {
+    "name": "LED Board",
+    "slug": "led-panel",
+    "version": "1.0.0",
+    "scheme": "ledpanel",
+    "orientation": "default",
+    "icon": "./assets/icon.png",
+    "splash": {
+      "backgroundColor": "#000000"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.ledpanel.app",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Camera is used to scan QR codes to join an LED panel session."
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "backgroundColor": "#000000"
+      },
+      "package": "com.ledpanel.app",
+      "permissions": ["CAMERA"]
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow LED Board to access your camera to scan QR codes."
+        }
+      ]
+    ]
+  }
+}
