@@ -7,6 +7,8 @@
     "dev": "expo start",
     "build:android:debug": "JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home cd android && ./gradlew assembleDebug",
     "build:android:release": "JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home cd android && ./gradlew assembleRelease",
+    "build:android:bundle": "cd android && JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home ANDROID_HOME=$HOME/Library/Android/sdk ./gradlew bundleRelease",
+    "build:android:bundle:debug": "cd android && JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home ANDROID_HOME=$HOME/Library/Android/sdk ./gradlew bundleDebug",
     "build:ios": "expo run:ios",
     "typecheck": "tsc --noEmit",
     "android": "expo run:android",

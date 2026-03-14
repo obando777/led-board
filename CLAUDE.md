@@ -41,6 +41,7 @@ pnpm dev:expo         # Expo dev server
 pnpm build            # All packages via Turbo
 pnpm build:web        # Web only (output: apps/web/dist/)
 pnpm build:android    # Core + Android release APK
+pnpm build:android:bundle  # Core + Android App Bundle (AAB) for Google Play
 
 # Type checking
 pnpm typecheck        # tsc --noEmit across all packages
@@ -97,6 +98,28 @@ cd apps/expo/android
 ```
 
 Or from repo root: `pnpm build:android` (release only).
+
+### Building App Bundles (AAB) for Google Play
+
+Google Play requires AAB format (not APK) for store uploads.
+
+```bash
+export JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home
+export ANDROID_HOME=$HOME/Library/Android/sdk
+cd apps/expo/android
+
+# Release AAB
+./gradlew bundleRelease
+# Output: app/build/outputs/bundle/release/app-release.aab
+
+# Debug AAB
+./gradlew bundleDebug
+# Output: app/build/outputs/bundle/debug/app-debug.aab
+```
+
+Or from repo root: `pnpm build:android:bundle` (release only).
+
+Upload the `.aab` file to Google Play Console (Production, Closed Testing, etc.).
 
 ### Common Build Issues
 
