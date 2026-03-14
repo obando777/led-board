@@ -74,8 +74,8 @@ export default function DirectorScreen() {
       <Text style={styles.sectionLabel}>Font Size: {state.fontSize}px</Text>
       <Slider
         style={styles.slider}
-        minimumValue={24}
-        maximumValue={120}
+        minimumValue={100}
+        maximumValue={300}
         step={4}
         value={state.fontSize}
         onValueChange={v => updateField('fontSize', v)}

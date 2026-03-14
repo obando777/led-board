@@ -14,7 +14,13 @@ export default function RootLayout() {
           headerTintColor: '#fff',
           contentStyle: { backgroundColor: '#000' },
         }}
-      />
+      >
+        <Stack.Screen name="index" options={{ title: 'LED Board' }} />
+        <Stack.Screen name="director" options={{ title: 'Create Message' }} />
+        <Stack.Screen name="qr-distribution" options={{ title: 'Distribute QR Codes' }} />
+        <Stack.Screen name="scan" options={{ title: 'Scan QR Code' }} />
+        <Stack.Screen name="panel" options={{ headerShown: false }} />
+      </Stack>
     </>
   );
 }

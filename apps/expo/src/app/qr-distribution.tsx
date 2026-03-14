@@ -1,18 +1,21 @@
 import { useState, useEffect } from 'react';
 import { View, Text, Pressable, ScrollView, StyleSheet, Dimensions } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import type { QRPayload, GridPosition } from '@led-panel/core';
+import type { QRPayload } from '@led-panel/core';
 import { GridService } from '@led-panel/core';
 import { QRCodeDisplay } from '../components/QRCodeDisplay';
+
+type Phase = 'setup' | 'scanning' | 'navigate';
 
 export default function QRDistributionScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ payloads: string }>();
 
   const [payloads, setPayloads] = useState<QRPayload[]>([]);
-  const [selectedSlot, setSelectedSlot] = useState<GridPosition | null>(null);
   const [directorSlot, setDirectorSlot] = useState<number | null>(null);
   const [countdown, setCountdown] = useState<number | null>(null);
+  const [delaySec, setDelaySec] = useState(10);
+  const [phase, setPhase] = useState<Phase>('setup');
 
   useEffect(() => {
     if (params.payloads) {
@@ -23,104 +26,134 @@ export default function QRDistributionScreen() {
   }, [params.payloads]);
 
   function handleStart() {
-    const delay = 10;
+    const delay = delaySec;
     const st = Date.now() + delay * 1000;
-    setPayloads(prev => prev.map(p => ({ ...p, startTimeUTC: st })));
+    const updatedPayloads = payloads.map(p => ({ ...p, startTimeUTC: st }));
+    setPayloads(updatedPayloads);
+    const slot = directorSlot ?? 0;
     setCountdown(delay);
+    setPhase('scanning');
 
+    let remaining = delay;
     const interval = setInterval(() => {
-      setCountdown(prev => {
-        if (prev === null || prev <= 1) {
-          clearInterval(interval);
-          if (directorSlot !== null && payloads[directorSlot]) {
-            router.push({
-              pathname: '/panel',
-              params: { payload: JSON.stringify({ ...payloads[directorSlot], startTimeUTC: st }) },
-            });
-          }
-          return 0;
-        }
-        return prev - 1;
-      });
+      remaining -= 1;
+      if (remaining <= 0) {
+        clearInterval(interval);
+        setCountdown(0);
+        setPhase('navigate');
+        setTimeout(() => {
+          router.push({
+            pathname: '/panel',
+            params: { payload: JSON.stringify(updatedPayloads[slot]) },
+          });
+        }, 0);
+      } else {
+        setCountdown(remaining);
+      }
     }, 1000);
   }
 
   const grid = payloads[0]?.grid ?? { cols: 2, rows: 1 };
-  const slots = GridService.generateSlots(grid);
   const screenWidth = Dimensions.get('window').width;
   const slotWidth = Math.min(80, (screenWidth - 32 - (grid.cols - 1) * 8) / grid.cols);
+  const totalSlots = grid.cols * grid.rows;
 
-  const selectedPayload = selectedSlot
-    ? payloads.find(p => p.position.col === selectedSlot.col && p.position.row === selectedSlot.row)
-    : null;
+  // In scanning phase, show all QR codes except director's
+  const friendPayloads = payloads.filter((_, idx) => idx !== (directorSlot ?? 0));
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
-      <Text style={styles.hint}>Tap a slot to show its QR code. Have each friend scan their assigned QR.</Text>
+      {/* Phase 1: Setup — pick your slot, set delay, press Start */}
+      {phase === 'setup' && (
+        <>
+          <Text style={styles.title}>Setup</Text>
+          <Text style={styles.hint}>
+            1. Tap your slot below{'\n'}
+            2. Set countdown delay{'\n'}
+            3. Press Start — QR codes will appear for friends to scan
+          </Text>
 
-      {/* Grid */}
-      <View style={[styles.grid, { width: slotWidth * grid.cols + (grid.cols - 1) * 8 }]}>
-        {Array.from({ length: grid.rows }).map((_, row) => (
-          <View key={row} style={styles.gridRow}>
-            {Array.from({ length: grid.cols }).map((_, col) => {
-              const idx = row * grid.cols + col;
-              const isSelected = selectedSlot?.col === col && selectedSlot?.row === row;
+          {/* Grid for director slot selection */}
+          <View style={[styles.grid, { width: slotWidth * grid.cols + (grid.cols - 1) * 8 }]}>
+            {Array.from({ length: grid.rows }).map((_, row) => (
+              <View key={row} style={styles.gridRow}>
+                {Array.from({ length: grid.cols }).map((_, col) => {
+                  const idx = row * grid.cols + col;
+                  const isDirector = directorSlot === idx;
+                  return (
+                    <Pressable
+                      key={col}
+                      style={[
+                        styles.slotBtn,
+                        { width: slotWidth, height: slotWidth },
+                        isDirector && styles.slotDirector,
+                      ]}
+                      onPress={() => setDirectorSlot(idx)}
+                    >
+                      <Text style={styles.slotText}>{idx + 1}</Text>
+                      {isDirector && <Text style={styles.youLabel}>YOU</Text>}
+                    </Pressable>
+                  );
+                })}
+              </View>
+            ))}
+          </View>
+
+          {/* Delay picker */}
+          <View style={styles.delayRow}>
+            <Text style={styles.delayLabel}>Countdown:</Text>
+            {[5, 10, 15, 30, 60].map(s => (
+              <Pressable
+                key={s}
+                style={[styles.delayBtn, delaySec === s && styles.delayBtnActive]}
+                onPress={() => setDelaySec(s)}
+              >
+                <Text style={[styles.delayBtnText, delaySec === s && styles.delayBtnTextActive]}>{s}s</Text>
+              </Pressable>
+            ))}
+          </View>
+
+          {/* Start button */}
+          <Pressable
+            style={[styles.startBtn, directorSlot === null && { opacity: 0.4 }]}
+            onPress={handleStart}
+            disabled={directorSlot === null}
+          >
+            <Text style={styles.startText}>Start ({delaySec}s countdown)</Text>
+          </Pressable>
+
+          {directorSlot === null && (
+            <Text style={styles.hintSmall}>Select your phone's slot first</Text>
+          )}
+        </>
+      )}
+
+      {/* Phase 2: Scanning — countdown running, show all QR codes */}
+      {phase === 'scanning' && (
+        <>
+          <Text style={styles.countdownBig}>{countdown}s</Text>
+          <Text style={styles.scanNow}>HAVE ALL PHONES SCAN NOW</Text>
+          <Text style={styles.hint}>
+            Friends: scan your assigned QR code before the countdown ends
+          </Text>
+
+          {/* Show all friend QR codes in a grid */}
+          <View style={styles.qrGrid}>
+            {friendPayloads.map((p) => {
+              const label = GridService.getSlotLabel(p.position, grid);
               return (
-                <Pressable
-                  key={col}
-                  style={[
-                    styles.slotBtn,
-                    { width: slotWidth, height: slotWidth },
-                    isSelected && styles.slotSelected,
-                    directorSlot === idx && styles.slotDirector,
-                  ]}
-                  onPress={() => setSelectedSlot({ col, row })}
-                >
-                  <Text style={styles.slotText}>{idx + 1}</Text>
-                  {directorSlot === idx && <Text style={styles.youLabel}>YOU</Text>}
-                </Pressable>
+                <View key={label} style={styles.qrItem}>
+                  <QRCodeDisplay
+                    payload={p}
+                    size={totalSlots <= 3 ? Math.min(260, screenWidth - 64) : Math.min(180, (screenWidth - 48) / 2)}
+                    label={label}
+                  />
+                </View>
               );
             })}
           </View>
-        ))}
-      </View>
-
-      {/* QR display */}
-      {selectedPayload && (
-        <View style={styles.qrContainer}>
-          <QRCodeDisplay
-            payload={selectedPayload}
-            size={Math.min(280, screenWidth - 64)}
-            label={GridService.getSlotLabel(selectedPayload.position, grid)}
-          />
-          {countdown !== null && countdown > 0 && (
-            <Text style={styles.countdownHint}>QR updated — starts in {countdown}s</Text>
-          )}
-        </View>
+        </>
       )}
-
-      {/* Director assign */}
-      {selectedSlot && directorSlot === null && (
-        <Pressable
-          style={styles.assignBtn}
-          onPress={() => setDirectorSlot(selectedSlot.row * grid.cols + selectedSlot.col)}
-        >
-          <Text style={styles.assignText}>
-            I'm this phone (Phone {selectedSlot.row * grid.cols + selectedSlot.col + 1})
-          </Text>
-        </Pressable>
-      )}
-
-      {/* Start */}
-      <Pressable
-        style={[styles.startBtn, countdown !== null && { opacity: 0.5 }]}
-        onPress={handleStart}
-        disabled={countdown !== null}
-      >
-        <Text style={styles.startText}>
-          {countdown !== null && countdown > 0 ? `Starting in ${countdown}s...` : 'Start in 10 seconds'}
-        </Text>
-      </Pressable>
     </ScrollView>
   );
 }
@@ -128,27 +161,34 @@ export default function QRDistributionScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#000' },
   content: { padding: 16, alignItems: 'center', gap: 16, paddingBottom: 40 },
-  hint: { color: '#888', fontSize: 13, textAlign: 'center' },
+  title: { color: '#fff', fontSize: 22, fontWeight: 'bold' },
+  hint: { color: '#888', fontSize: 13, textAlign: 'center', lineHeight: 20 },
+  hintSmall: { color: '#666', fontSize: 12, textAlign: 'center' },
   grid: { alignSelf: 'center' },
   gridRow: { flexDirection: 'row', gap: 8, marginBottom: 8 },
   slotBtn: {
     justifyContent: 'center', alignItems: 'center',
     backgroundColor: '#111', borderWidth: 2, borderColor: '#333', borderRadius: 12,
   },
-  slotSelected: { borderColor: '#4444ff' },
-  slotDirector: { backgroundColor: '#1a2e1a' },
+  slotDirector: { borderColor: '#4f4', backgroundColor: '#1a2e1a' },
   slotText: { color: '#fff', fontSize: 20, fontWeight: 'bold' },
   youLabel: { color: '#4f4', fontSize: 10 },
-  qrContainer: { alignItems: 'center' },
-  countdownHint: { color: '#4444ff', fontSize: 14, marginTop: 8 },
-  assignBtn: {
-    padding: 12, backgroundColor: '#1a2e1a',
-    borderWidth: 1, borderColor: '#4f4', borderRadius: 10,
+  delayRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  delayLabel: { color: '#888', fontSize: 14 },
+  delayBtn: {
+    paddingHorizontal: 12, paddingVertical: 6,
+    borderRadius: 8, borderWidth: 1, borderColor: '#333', backgroundColor: '#111',
   },
-  assignText: { color: '#4f4', fontSize: 14, textAlign: 'center' },
+  delayBtnActive: { borderColor: '#ff4444', backgroundColor: '#2a1111' },
+  delayBtnText: { color: '#888', fontSize: 14 },
+  delayBtnTextActive: { color: '#ff4444', fontWeight: 'bold' },
   startBtn: {
     width: '100%', padding: 16, backgroundColor: '#ff4444',
     borderRadius: 12, alignItems: 'center',
   },
   startText: { color: '#fff', fontSize: 18, fontWeight: 'bold' },
+  countdownBig: { color: '#ff4444', fontSize: 64, fontWeight: 'bold' },
+  scanNow: { color: '#ff4444', fontSize: 20, fontWeight: 'bold', textAlign: 'center' },
+  qrGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'center', gap: 16 },
+  qrItem: { alignItems: 'center' },
 });

@@ -28,6 +28,12 @@ export function LEDCanvas({ payload, width, height }: LEDCanvasProps) {
       payload.fontSize,
     );
 
+    // Use reference dimensions for animation math so all devices compute identical values
+    const refWidth = payload.phoneWidth;
+    const refHeight = payload.phoneHeight;
+    const scaleX = width / refWidth;
+    const scaleY = height / refHeight;
+
     // Measure text width using canvas
     ctx.font = `bold ${payload.fontSize}px system-ui, sans-serif`;
     const totalTextWidth = ctx.measureText(payload.text).width;
@@ -35,11 +41,11 @@ export function LEDCanvas({ payload, width, height }: LEDCanvasProps) {
     const slice = GridService.computeSlice(
       payload.position,
       payload.grid,
-      width,
-      height,
+      refWidth,
+      refHeight,
     );
 
-    const panel = GridService.computePanelDimensions(payload.grid, width, height);
+    const panel = GridService.computePanelDimensions(payload.grid, refWidth, refHeight);
 
     const config = {
       text: payload.text,
@@ -66,14 +72,16 @@ export function LEDCanvas({ payload, width, height }: LEDCanvasProps) {
         return;
       }
 
-      // Compute text position: scrollOffsetX is in panel coordinates
-      // Subtract this phone's slice offset to get local coordinates
+      // Compute text position in reference coordinates, then scale to actual screen
       const localX = frame.scrollOffsetX - slice.offsetX;
-      const textY = height / 2;
+      const textY = refHeight / 2;
+
+      ctx.save();
+      ctx.scale(scaleX, scaleY);
 
       switch (renderConfig.style) {
         case 'dot-matrix':
-          drawDotMatrix(ctx, payload.text, localX, textY, renderConfig, width, height);
+          drawDotMatrix(ctx, payload.text, localX, textY, renderConfig, refWidth, refHeight);
           break;
         case 'neon':
           drawNeon(ctx, payload.text, localX, textY, renderConfig);
@@ -83,6 +91,8 @@ export function LEDCanvas({ payload, width, height }: LEDCanvasProps) {
           drawSmooth(ctx, payload.text, localX, textY, renderConfig);
           break;
       }
+
+      ctx.restore();
     }
 
     function tick() {

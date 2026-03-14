@@ -1,0 +1,829 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>LED Board Prototype</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { background: #111; color: #fff; font-family: system-ui; padding: 20px; }
+  h1 { text-align: center; margin-bottom: 8px; font-size: 18px; color: #888; }
+  .controls {
+    display: flex; gap: 12px; justify-content: center; flex-wrap: wrap;
+    margin-bottom: 20px; align-items: center;
+  }
+  .controls label { color: #888; font-size: 13px; }
+  .controls select, .controls input {
+    background: #222; color: #fff; border: 1px solid #444;
+    border-radius: 6px; padding: 6px 10px; font-size: 13px;
+  }
+  .controls input[type="color"] { width: 40px; height: 30px; padding: 2px; cursor: pointer; }
+
+  .led-panel {
+    position: relative;
+    width: 100%;
+    height: 200px;
+    overflow: hidden;
+    border-radius: 8px;
+    border: 2px solid #222;
+    margin-bottom: 24px;
+  }
+  .led-panel .label {
+    position: absolute; top: 8px; left: 12px;
+    font-size: 11px; color: #555; z-index: 10; pointer-events: none;
+  }
+  .led-panel.dot-matrix { background: #0a0a0a; }
+  .led-panel.neon { background: #050510; }
+  .neon-text {
+    position: absolute; white-space: nowrap;
+    font-family: 'Courier New', monospace; font-weight: bold; font-size: 80px;
+    top: 50%; transform: translateY(-50%);
+  }
+  .led-panel.smooth { background: #000; }
+  .smooth-text {
+    position: absolute; white-space: nowrap;
+    font-family: 'Courier New', monospace; font-weight: bold; font-size: 80px;
+    top: 50%; transform: translateY(-50%);
+  }
+  .led-panel.fullscreen {
+    position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+    width: 100vw; height: 100vh;
+    z-index: 100; border: none; border-radius: 0; margin: 0;
+  }
+  .fullscreen-hint {
+    text-align: center; color: #555; font-size: 12px; margin-bottom: 16px;
+  }
+
+  /* Character test grid */
+  #charTest {
+    margin-bottom: 24px;
+    border: 2px solid #222;
+    border-radius: 8px;
+    background: #0a0a0a;
+  }
+</style>
+</head>
+<body>
+
+<h1>LED Board Panel Prototype</h1>
+<p class="fullscreen-hint">Click any panel to go fullscreen. Press Escape to exit.</p>
+
+<div class="controls">
+  <label>Text: <input type="text" id="msgInput" value="HELLO WORLD! 🎉" /></label>
+  <label>Speed: <input type="range" id="speedInput" min="20" max="400" value="120" /> <span id="speedVal">120</span>px/s</label>
+  <label>Color: <input type="color" id="colorInput" value="#ff2222" /></label>
+  <label>BG: <input type="color" id="bgInput" value="#000000" /></label>
+  <label>Font Size: <input type="range" id="sizeInput" min="30" max="160" value="80" /> <span id="sizeVal">80</span></label>
+</div>
+
+<!-- Character test -->
+<h1>All Characters Test</h1>
+<canvas id="charTest" width="1200" height="300"></canvas>
+
+<!-- Dot Matrix -->
+<div class="led-panel dot-matrix" id="panelDotMatrix" onclick="toggleFullscreen(this)">
+  <span class="label">dot-matrix</span>
+  <canvas class="dot-matrix-canvas" id="dotCanvas" style="width:100%;height:100%"></canvas>
+</div>
+
+<!-- Neon -->
+<div class="led-panel neon" id="panelNeon" onclick="toggleFullscreen(this)">
+  <span class="label">neon</span>
+  <div class="neon-text" id="neonText"></div>
+</div>
+
+<!-- Smooth -->
+<div class="led-panel smooth" id="panelSmooth" onclick="toggleFullscreen(this)">
+  <span class="label">smooth</span>
+  <div class="smooth-text" id="smoothText"></div>
+</div>
+
+<script>
+// --- State ---
+let text = 'HELLO WORLD! 🎉';
+let speed = 120;
+let textColor = '#ff2222';
+let bgColor = '#000000';
+let fontSize = 80;
+
+const msgInput = document.getElementById('msgInput');
+const speedInput = document.getElementById('speedInput');
+const colorInput = document.getElementById('colorInput');
+const bgInput = document.getElementById('bgInput');
+const sizeInput = document.getElementById('sizeInput');
+
+msgInput.addEventListener('input', e => { text = e.target.value; });
+speedInput.addEventListener('input', e => { speed = +e.target.value; document.getElementById('speedVal').textContent = speed; });
+colorInput.addEventListener('input', e => { textColor = e.target.value; });
+bgInput.addEventListener('input', e => { bgColor = e.target.value; });
+sizeInput.addEventListener('input', e => { fontSize = +e.target.value; document.getElementById('sizeVal').textContent = fontSize; });
+
+function toggleFullscreen(el) { el.classList.toggle('fullscreen'); }
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') document.querySelectorAll('.fullscreen').forEach(el => el.classList.remove('fullscreen'));
+});
+
+// =====================================================
+// 5x7 DOT MATRIX FONT
+// Each character is 5 columns wide, 7 rows tall.
+// Stored as arrays of 5 bytes (one per column).
+// Bit 6 = top row, bit 0 = bottom row.
+// =====================================================
+const FONT = {
+  'A': [
+    0b0111111, // col 0:  .XXXXX.  →  bottom 6 bits + top
+    0b1001000,
+    0b1001000,
+    0b1001000,
+    0b0111111,
+  ],
+  'B': [
+    0b1111111,
+    0b1001001,
+    0b1001001,
+    0b1001001,
+    0b0110110,
+  ],
+  'C': [
+    0b0111110,
+    0b1000001,
+    0b1000001,
+    0b1000001,
+    0b0100010,
+  ],
+  'D': [
+    0b1111111,
+    0b1000001,
+    0b1000001,
+    0b1000001,
+    0b0111110,
+  ],
+  'E': [
+    0b1111111,
+    0b1001001,
+    0b1001001,
+    0b1001001,
+    0b1000001,
+  ],
+  'F': [
+    0b1111111,
+    0b1001000,
+    0b1001000,
+    0b1001000,
+    0b1000000,
+  ],
+  'G': [
+    0b0111110,
+    0b1000001,
+    0b1001001,
+    0b1001001,
+    0b0101110,
+  ],
+  'H': [
+    0b1111111,
+    0b0001000,
+    0b0001000,
+    0b0001000,
+    0b1111111,
+  ],
+  'I': [
+    0b0000000,
+    0b1000001,
+    0b1111111,
+    0b1000001,
+    0b0000000,
+  ],
+  'J': [
+    0b0000010,
+    0b0000001,
+    0b0000001,
+    0b0000001,
+    0b1111110,
+  ],
+  'K': [
+    0b1111111,
+    0b0001000,
+    0b0010100,
+    0b0100010,
+    0b1000001,
+  ],
+  'L': [
+    0b1111111,
+    0b0000001,
+    0b0000001,
+    0b0000001,
+    0b0000001,
+  ],
+  'M': [
+    0b1111111,
+    0b0100000,
+    0b0010000,
+    0b0100000,
+    0b1111111,
+  ],
+  'N': [
+    0b1111111,
+    0b0100000,
+    0b0010000,
+    0b0001000,
+    0b1111111,
+  ],
+  'O': [
+    0b0111110,
+    0b1000001,
+    0b1000001,
+    0b1000001,
+    0b0111110,
+  ],
+  'P': [
+    0b1111111,
+    0b1001000,
+    0b1001000,
+    0b1001000,
+    0b0110000,
+  ],
+  'Q': [
+    0b0111110,
+    0b1000001,
+    0b1000101,
+    0b1000010,
+    0b0111101,
+  ],
+  'R': [
+    0b1111111,
+    0b1001000,
+    0b1001100,
+    0b1001010,
+    0b0110001,
+  ],
+  'S': [
+    0b0110010,
+    0b1001001,
+    0b1001001,
+    0b1001001,
+    0b0100110,
+  ],
+  'T': [
+    0b1000000,
+    0b1000000,
+    0b1111111,
+    0b1000000,
+    0b1000000,
+  ],
+  'U': [
+    0b1111110,
+    0b0000001,
+    0b0000001,
+    0b0000001,
+    0b1111110,
+  ],
+  'V': [
+    0b1111100,
+    0b0000010,
+    0b0000001,
+    0b0000010,
+    0b1111100,
+  ],
+  'W': [
+    0b1111110,
+    0b0000001,
+    0b0001110,
+    0b0000001,
+    0b1111110,
+  ],
+  'X': [
+    0b1100011,
+    0b0010100,
+    0b0001000,
+    0b0010100,
+    0b1100011,
+  ],
+  'Y': [
+    0b1100000,
+    0b0010000,
+    0b0001111,
+    0b0010000,
+    0b1100000,
+  ],
+  'Z': [
+    0b1000011,
+    0b1000101,
+    0b1001001,
+    0b1010001,
+    0b1100001,
+  ],
+  '0': [
+    0b0111110,
+    0b1000101,
+    0b1001001,
+    0b1010001,
+    0b0111110,
+  ],
+  '1': [
+    0b0000000,
+    0b0100001,
+    0b1111111,
+    0b0000001,
+    0b0000000,
+  ],
+  '2': [
+    0b0100011,
+    0b1000101,
+    0b1001001,
+    0b1001001,
+    0b0110001,
+  ],
+  '3': [
+    0b0100010,
+    0b1000001,
+    0b1001001,
+    0b1001001,
+    0b0110110,
+  ],
+  '4': [
+    0b0011000,
+    0b0101000,
+    0b1001000,
+    0b1111111,
+    0b0001000,
+  ],
+  '5': [
+    0b1110010,
+    0b1010001,
+    0b1010001,
+    0b1010001,
+    0b1001110,
+  ],
+  '6': [
+    0b0111110,
+    0b1001001,
+    0b1001001,
+    0b1001001,
+    0b0100110,
+  ],
+  '7': [
+    0b1000000,
+    0b1000111,
+    0b1001000,
+    0b1010000,
+    0b1100000,
+  ],
+  '8': [
+    0b0110110,
+    0b1001001,
+    0b1001001,
+    0b1001001,
+    0b0110110,
+  ],
+  '9': [
+    0b0110010,
+    0b1001001,
+    0b1001001,
+    0b1001001,
+    0b0111110,
+  ],
+  ' ': [0,0,0,0,0],
+  '!': [
+    0b0000000,
+    0b0000000,
+    0b1111010,
+    0b0000000,
+    0b0000000,
+  ],
+  '?': [
+    0b0100000,
+    0b1000000,
+    0b1001101,
+    0b1001000,
+    0b0110000,
+  ],
+  '.': [
+    0b0000000,
+    0b0000011,
+    0b0000011,
+    0b0000000,
+    0b0000000,
+  ],
+  ',': [
+    0b0000000,
+    0b0000001,
+    0b0000110,
+    0b0000100,
+    0b0000000,
+  ],
+  '-': [
+    0b0001000,
+    0b0001000,
+    0b0001000,
+    0b0001000,
+    0b0001000,
+  ],
+  '+': [
+    0b0001000,
+    0b0001000,
+    0b0111110,
+    0b0001000,
+    0b0001000,
+  ],
+  ':': [
+    0b0000000,
+    0b0110110,
+    0b0110110,
+    0b0000000,
+    0b0000000,
+  ],
+  "'": [
+    0b0000000,
+    0b1100000,
+    0b0000000,
+    0b0000000,
+    0b0000000,
+  ],
+  '"': [
+    0b0000000,
+    0b1100000,
+    0b0000000,
+    0b1100000,
+    0b0000000,
+  ],
+  '/': [
+    0b0000001,
+    0b0000110,
+    0b0001000,
+    0b0110000,
+    0b1000000,
+  ],
+  '(': [
+    0b0000000,
+    0b0011100,
+    0b0100010,
+    0b1000001,
+    0b0000000,
+  ],
+  ')': [
+    0b0000000,
+    0b1000001,
+    0b0100010,
+    0b0011100,
+    0b0000000,
+  ],
+  '#': [
+    0b0010100,
+    0b0111110,
+    0b0010100,
+    0b0111110,
+    0b0010100,
+  ],
+  '@': [
+    0b0111110,
+    0b1000001,
+    0b1011101,
+    0b1010101,
+    0b0111100,
+  ],
+  '&': [
+    0b0110110,
+    0b1001001,
+    0b0110101,
+    0b0000010,
+    0b0000101,
+  ],
+  '*': [
+    0b0010100,
+    0b0001000,
+    0b0111110,
+    0b0001000,
+    0b0010100,
+  ],
+  '=': [
+    0b0010100,
+    0b0010100,
+    0b0010100,
+    0b0010100,
+    0b0010100,
+  ],
+  '_': [
+    0b0000001,
+    0b0000001,
+    0b0000001,
+    0b0000001,
+    0b0000001,
+  ],
+  '<': [
+    0b0001000,
+    0b0010100,
+    0b0100010,
+    0b1000001,
+    0b0000000,
+  ],
+  '>': [
+    0b0000000,
+    0b1000001,
+    0b0100010,
+    0b0010100,
+    0b0001000,
+  ],
+  '%': [
+    0b1100010,
+    0b1100100,
+    0b0001000,
+    0b0010011,
+    0b0100011,
+  ],
+  '$': [
+    0b0110010,
+    0b1001001,
+    0b1111111,
+    0b1001001,
+    0b0100110,
+  ],
+};
+
+// lowercase maps to uppercase
+'abcdefghijklmnopqrstuvwxyz'.split('').forEach((c, i) => {
+  FONT[c] = FONT[String.fromCharCode(65 + i)];
+});
+
+const CHAR_W = 5;
+const CHAR_H = 7;
+
+// =====================================================
+// CHARACTER TEST — draw every character in the font
+// =====================================================
+function drawCharTest() {
+  const canvas = document.getElementById('charTest');
+  const ctx = canvas.getContext('2d');
+  const dpr = devicePixelRatio;
+  const keys = Object.keys(FONT).filter(k => k.length === 1 && k >= ' ' && k <= 'z');
+  // Remove lowercase dupes
+  const uniqueKeys = [...new Set(keys.filter(k => k === k.toUpperCase() || !FONT[k.toUpperCase()]))];
+  const allKeys = Object.keys(FONT).filter(k => k === k.toUpperCase());
+
+  const dotR = 3;
+  const dotSpacing = 8;
+  const charPixelW = (CHAR_W + 1) * dotSpacing;
+  const charPixelH = CHAR_H * dotSpacing;
+  const padding = 16;
+  const labelH = 16;
+  const cols = Math.floor((1200 - padding * 2) / charPixelW);
+  const rows = Math.ceil(allKeys.length / cols);
+
+  canvas.width = 1200 * dpr;
+  canvas.height = (padding * 2 + rows * (charPixelH + labelH + 8)) * dpr;
+  canvas.style.width = '1200px';
+  canvas.style.height = (padding * 2 + rows * (charPixelH + labelH + 8)) + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  ctx.fillStyle = '#0a0a0a';
+  ctx.fillRect(0, 0, 1200, canvas.height / dpr);
+
+  allKeys.forEach((ch, idx) => {
+    const col = idx % cols;
+    const row = Math.floor(idx / cols);
+    const ox = padding + col * charPixelW;
+    const oy = padding + row * (charPixelH + labelH + 8);
+
+    // Label
+    ctx.fillStyle = '#555';
+    ctx.font = '11px monospace';
+    ctx.fillText(ch, ox + charPixelW / 2 - 3, oy + charPixelH + labelH);
+
+    const colData = FONT[ch];
+    if (!colData) return;
+
+    for (let c = 0; c < CHAR_W; c++) {
+      const bits = colData[c];
+      for (let r = 0; r < CHAR_H; r++) {
+        const x = ox + c * dotSpacing;
+        // bit 6 = top row, bit 0 = bottom row
+        const y = oy + (CHAR_H - 1 - r) * dotSpacing;
+        const lit = bits & (1 << r);
+
+        if (lit) {
+          drawDot(ctx, x, y, dotR, '#ff2222', true);
+        } else {
+          drawDot(ctx, x, y, dotR * 0.6, '#ff2222', false);
+        }
+      }
+    }
+  });
+}
+
+// =====================================================
+// DOT RENDERER
+// =====================================================
+function drawDot(ctx, x, y, r, color, lit) {
+  if (lit) {
+    // Glow halo
+    const grad = ctx.createRadialGradient(x, y, 0, x, y, r * 3);
+    grad.addColorStop(0, adjustAlpha(color, 0.35));
+    grad.addColorStop(1, adjustAlpha(color, 0));
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(x, y, r * 3, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Bright core
+    const grad2 = ctx.createRadialGradient(x, y, 0, x, y, r);
+    grad2.addColorStop(0, lighten(color, 0.6));
+    grad2.addColorStop(0.6, color);
+    grad2.addColorStop(1, adjustAlpha(color, 0.7));
+    ctx.fillStyle = grad2;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+  } else {
+    // Dim unlit dot
+    ctx.fillStyle = adjustAlpha(color, 0.07);
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+}
+
+// =====================================================
+// DOT MATRIX SCROLLING PANEL
+// =====================================================
+const dotCanvas = document.getElementById('dotCanvas');
+const dotCtx = dotCanvas.getContext('2d');
+
+function renderDotMatrix(timestamp) {
+  const panel = document.getElementById('panelDotMatrix');
+  const rect = panel.getBoundingClientRect();
+  const dpr = devicePixelRatio;
+  dotCanvas.width = rect.width * dpr;
+  dotCanvas.height = rect.height * dpr;
+  dotCanvas.style.width = rect.width + 'px';
+  dotCanvas.style.height = rect.height + 'px';
+  dotCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+  const w = rect.width;
+  const h = rect.height;
+
+  const scale = fontSize / 80;
+  const dotR = Math.max(2, Math.round(4 * scale));
+  const dotSpacing = Math.max(5, Math.round(10 * scale));
+  const charPixelW = (CHAR_W + 1) * dotSpacing; // +1 col gap between chars
+
+  // Build character list (split respecting emoji surrogate pairs)
+  const chars = [...text];
+  // Measure total width accounting for emojis
+  const emojiSize = CHAR_H * dotSpacing;
+  dotCtx.font = `${emojiSize}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
+  let totalTextWidth = 0;
+  for (const ch of chars) {
+    const upper = ch.toUpperCase();
+    if (FONT[upper]) {
+      totalTextWidth += charPixelW;
+    } else {
+      totalTextWidth += dotCtx.measureText(ch).width + dotSpacing;
+    }
+  }
+
+  // Scroll
+  const cycleLen = totalTextWidth + w;
+  const offset = ((timestamp / 1000) * speed) % cycleLen;
+  const scrollX = w - offset;
+
+  // Clear
+  dotCtx.fillStyle = bgColor;
+  dotCtx.fillRect(0, 0, w, h);
+
+  const yCenter = h / 2;
+  const yStart = yCenter - (CHAR_H * dotSpacing) / 2;
+
+  // Draw background dots across visible area
+  const bgCols = Math.ceil(w / dotSpacing) + 2;
+  const bgRows = Math.ceil(h / dotSpacing) + 2;
+  const bgOffsetX = (w % dotSpacing) / 2;
+  const bgOffsetY = (h % dotSpacing) / 2;
+
+  dotCtx.fillStyle = adjustAlpha(textColor, 0.05);
+  for (let row = 0; row < bgRows; row++) {
+    for (let col = 0; col < bgCols; col++) {
+      const x = bgOffsetX + col * dotSpacing;
+      const y = bgOffsetY + row * dotSpacing;
+      dotCtx.beginPath();
+      dotCtx.arc(x, y, dotR * 0.6, 0, Math.PI * 2);
+      dotCtx.fill();
+    }
+  }
+
+  // Draw text characters
+  let cursorX = scrollX;
+  for (const ch of chars) {
+    const colData = FONT[ch.toUpperCase()];
+
+    // Skip chars fully off screen
+    if (cursorX + charPixelW < -dotSpacing || cursorX > w + dotSpacing) {
+      cursorX += charPixelW;
+      continue;
+    }
+
+    if (!colData) {
+      // Unknown char (emoji, etc) — draw it raw/natively as a color emoji
+      const emojiDrawSize = CHAR_H * dotSpacing;
+      dotCtx.save();
+      dotCtx.font = `${emojiDrawSize}px "Apple Color Emoji", "Segoe UI Emoji", "Noto Color Emoji", sans-serif`;
+      dotCtx.textBaseline = 'alphabetic';
+      dotCtx.fillStyle = '#fff';
+      const emojiW = dotCtx.measureText(ch).width;
+      const ex = cursorX;
+      const ey = yStart + emojiDrawSize * 0.85;
+      dotCtx.fillText(ch, ex, ey);
+      dotCtx.restore();
+      cursorX += emojiW + dotSpacing;
+      continue;
+    } else {
+      for (let c = 0; c < CHAR_W; c++) {
+        const bits = colData[c];
+        for (let r = 0; r < CHAR_H; r++) {
+          const x = cursorX + c * dotSpacing;
+          // bit 6 = top, bit 0 = bottom → row 0 on screen = bit 6
+          const y = yStart + (CHAR_H - 1 - r) * dotSpacing;
+          if (x > -dotSpacing && x < w + dotSpacing) {
+            if (bits & (1 << r)) {
+              drawDot(dotCtx, x, y, dotR, textColor, true);
+            }
+          }
+        }
+      }
+    }
+    cursorX += charPixelW;
+  }
+}
+
+// =====================================================
+// NEON + SMOOTH RENDERERS
+// =====================================================
+const neonEl = document.getElementById('neonText');
+const panelNeon = document.getElementById('panelNeon');
+const smoothEl = document.getElementById('smoothText');
+const panelSmooth = document.getElementById('panelSmooth');
+
+function renderNeon(timestamp) {
+  const w = panelNeon.getBoundingClientRect().width;
+  panelNeon.style.backgroundColor = bgColor;
+  neonEl.textContent = text;
+  neonEl.style.fontSize = fontSize + 'px';
+  neonEl.style.color = textColor;
+  neonEl.style.textShadow = `
+    0 0 7px ${textColor},
+    0 0 20px ${textColor},
+    0 0 42px ${textColor},
+    0 0 80px ${adjustAlpha(textColor, 0.6)}
+  `;
+  const textW = neonEl.scrollWidth;
+  const cycleLen = textW + w;
+  const offset = ((timestamp / 1000) * speed) % cycleLen;
+  neonEl.style.left = (w - offset) + 'px';
+}
+
+function renderSmooth(timestamp) {
+  const w = panelSmooth.getBoundingClientRect().width;
+  panelSmooth.style.backgroundColor = bgColor;
+  smoothEl.textContent = text;
+  smoothEl.style.fontSize = fontSize + 'px';
+  smoothEl.style.color = textColor;
+  smoothEl.style.textShadow = 'none';
+  const textW = smoothEl.scrollWidth;
+  const cycleLen = textW + w;
+  const offset = ((timestamp / 1000) * speed) % cycleLen;
+  smoothEl.style.left = (w - offset) + 'px';
+}
+
+// =====================================================
+// HELPERS
+// =====================================================
+function adjustAlpha(hex, alpha) {
+  const r = parseInt(hex.slice(1,3), 16);
+  const g = parseInt(hex.slice(3,5), 16);
+  const b = parseInt(hex.slice(5,7), 16);
+  return `rgba(${r},${g},${b},${alpha})`;
+}
+
+function lighten(hex, amount) {
+  let r = parseInt(hex.slice(1,3), 16);
+  let g = parseInt(hex.slice(3,5), 16);
+  let b = parseInt(hex.slice(5,7), 16);
+  r = Math.min(255, Math.round(r + (255 - r) * amount));
+  g = Math.min(255, Math.round(g + (255 - g) * amount));
+  b = Math.min(255, Math.round(b + (255 - b) * amount));
+  return `rgb(${r},${g},${b})`;
+}
+
+// =====================================================
+// MAIN LOOP
+// =====================================================
+drawCharTest();
+
+function loop(timestamp) {
+  renderDotMatrix(timestamp);
+  renderNeon(timestamp);
+  renderSmooth(timestamp);
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

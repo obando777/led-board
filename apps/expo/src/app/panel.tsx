@@ -3,6 +3,8 @@ import { View, StyleSheet, Pressable, Text } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import * as ScreenOrientation from 'expo-screen-orientation';
+import * as NavigationBar from 'expo-navigation-bar';
+import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import type { QRPayload } from '@led-panel/core';
 import { LEDCanvas } from '../components/LEDCanvas';
 
@@ -31,16 +33,23 @@ export default function PanelScreen() {
     ScreenOrientation.lockAsync(orientationLock).catch(() => {});
 
     // Keep screen awake
-    // expo-keep-awake could be used here but we avoid extra deps
-    // activateKeepAwakeAsync().catch(() => {});
+    activateKeepAwakeAsync().catch(() => {});
+
+    // Hide Android navigation bar for true fullscreen
+    NavigationBar.setVisibilityAsync('hidden').catch(() => {});
+    NavigationBar.setBehaviorAsync('overlay-swipe').catch(() => {});
 
     return () => {
       ScreenOrientation.unlockAsync().catch(() => {});
+      deactivateKeepAwake();
+      NavigationBar.setVisibilityAsync('visible').catch(() => {});
     };
   }, [payload]);
 
   function handleExit() {
     ScreenOrientation.unlockAsync().catch(() => {});
+    deactivateKeepAwake();
+    NavigationBar.setVisibilityAsync('visible').catch(() => {});
     router.back();
   }
 

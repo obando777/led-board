@@ -37,6 +37,8 @@ export function QRDistributionView() {
         position: slot.position,
         startTimeUTC: st,
         fontSize: passedState.fontSize,
+        phoneWidth: window.innerWidth,
+        phoneHeight: window.innerHeight,
       }));
       setPayloads(generated);
     }

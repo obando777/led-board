@@ -38,6 +38,8 @@ export function useDirectorController() {
   const generateQRPayloads = useCallback((countdownSeconds: number = 10): QRPayload[] => {
     const startTimeUTC = Date.now() + countdownSeconds * 1000;
     const slots = GridService.generateSlots(state.grid);
+    const phoneWidth = window.innerWidth;
+    const phoneHeight = window.innerHeight;
 
     const payloads: QRPayload[] = slots.map(slot => ({
       v: 1 as const,
@@ -51,6 +53,8 @@ export function useDirectorController() {
       position: slot.position,
       startTimeUTC,
       fontSize: state.fontSize,
+      phoneWidth,
+      phoneHeight,
     }));
 
     setState(prev => ({ ...prev, qrPayloads: payloads, startTimeUTC }));

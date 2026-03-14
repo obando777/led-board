@@ -27,6 +27,8 @@ export const QRCodecService = {
       pr: payload.position.row,
       st: payload.startTimeUTC,
       fs: payload.fontSize,
+      pw: payload.phoneWidth,
+      ph: payload.phoneHeight,
     };
     return JSON.stringify(compact);
   },
@@ -50,6 +52,8 @@ export const QRCodecService = {
         position: { col: compact.pc, row: compact.pr },
         startTimeUTC: compact.st,
         fontSize: compact.fs,
+        phoneWidth: compact.pw,
+        phoneHeight: compact.ph,
       };
       return this.validate(payload) ? payload : null;
     } catch {
@@ -73,6 +77,8 @@ export const QRCodecService = {
     if (!VALID_ORIENTATIONS.includes(p.orientation as Orientation)) return false;
     if (typeof p.fontSize !== 'number' || p.fontSize <= 0) return false;
     if (typeof p.startTimeUTC !== 'number') return false;
+    if (typeof p.phoneWidth !== 'number' || p.phoneWidth <= 0) return false;
+    if (typeof p.phoneHeight !== 'number' || p.phoneHeight <= 0) return false;
 
     const grid = p.grid as Record<string, unknown> | undefined;
     if (!grid || typeof grid.cols !== 'number' || typeof grid.rows !== 'number') return false;

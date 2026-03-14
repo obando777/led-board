@@ -1,4 +1,5 @@
 import { useState, useCallback } from 'react';
+import { Dimensions } from 'react-native';
 import type { LEDStyle, Orientation, GridDimensions, QRPayload } from '@led-panel/core';
 import { GridService } from '@led-panel/core';
 
@@ -23,7 +24,7 @@ const DEFAULT_STATE: DirectorState = {
   speed: 100,
   orientation: 'landscape',
   grid: { cols: 2, rows: 1 },
-  fontSize: 48,
+  fontSize: 200,
   qrPayloads: [],
   startTimeUTC: 0,
 };
@@ -38,6 +39,7 @@ export function useDirectorController() {
   const generateQRPayloads = useCallback((): QRPayload[] => {
     const startTimeUTC = Date.now() + 60000; // placeholder
     const slots = GridService.generateSlots(state.grid);
+    const { width: phoneWidth, height: phoneHeight } = Dimensions.get('window');
 
     const payloads: QRPayload[] = slots.map(slot => ({
       v: 1 as const,
@@ -51,6 +53,8 @@ export function useDirectorController() {
       position: slot.position,
       startTimeUTC,
       fontSize: state.fontSize,
+      phoneWidth,
+      phoneHeight,
     }));
 
     setState(prev => ({ ...prev, qrPayloads: payloads, startTimeUTC }));

@@ -25,6 +25,10 @@ export interface QRPayload {
   startTimeUTC: number;
   /** Font size / LED dot scale factor */
   fontSize: number;
+  /** Reference phone width (px) — all phones use this for animation math */
+  phoneWidth: number;
+  /** Reference phone height (px) — all phones use this for animation math */
+  phoneHeight: number;
 }
 
 export type LEDStyle = 'dot-matrix' | 'smooth' | 'neon';
