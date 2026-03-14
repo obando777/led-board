@@ -1,34 +1,28 @@
 /**
- * QR payload encoded into each phone's QR code.
- * Contains ALL information needed for offline rendering.
+ * Shared QR payload — what goes into the QR code (no position).
+ * All phones scan the same QR, then pick their position locally.
  */
-export interface QRPayload {
-  /** Schema version for forward compat */
+export interface SharedQRPayload {
   v: 1;
-  /** Text + emojis to display */
   text: string;
-  /** Scroll speed in pixels per second */
   speed: number;
-  /** LED rendering style */
   style: LEDStyle;
-  /** Text color as hex string */
   textColor: string;
-  /** Background color as hex string */
   bgColor: string;
-  /** Phone orientation */
   orientation: Orientation;
-  /** Grid dimensions */
   grid: GridDimensions;
-  /** This phone's position in the grid (0-indexed) */
-  position: GridPosition;
-  /** UTC timestamp (ms) when animation starts */
   startTimeUTC: number;
-  /** Font size / LED dot scale factor */
   fontSize: number;
-  /** Reference phone width (px) — all phones use this for animation math */
   phoneWidth: number;
-  /** Reference phone height (px) — all phones use this for animation math */
   phoneHeight: number;
+}
+
+/**
+ * Full QR payload with position — used for rendering.
+ * Created locally after scanning by combining SharedQRPayload + selected position.
+ */
+export interface QRPayload extends SharedQRPayload {
+  position: GridPosition;
 }
 
 export type LEDStyle = 'dot-matrix' | 'smooth' | 'neon';

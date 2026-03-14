@@ -1,10 +1,10 @@
 import { View, Text } from 'react-native';
 import QRCode from 'react-native-qrcode-svg';
-import type { QRPayload } from '@led-panel/core';
+import type { SharedQRPayload } from '@led-panel/core';
 import { QRCodecService } from '@led-panel/core';
 
 interface QRCodeDisplayProps {
-  payload: QRPayload;
+  payload: SharedQRPayload;
   size?: number;
   label?: string;
 }
@@ -20,6 +20,7 @@ export function QRCodeDisplay({ payload, size = 256, label }: QRCodeDisplayProps
         backgroundColor="#ffffff"
         color="#000000"
         ecl="M"
+        quietZone={16}
       />
       {label && (
         <Text style={{ color: '#aaa', marginTop: 8, fontSize: 14, textAlign: 'center' }}>

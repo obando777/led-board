@@ -1,7 +1,6 @@
 import { useState, useCallback } from 'react';
 import { Dimensions } from 'react-native';
-import type { LEDStyle, Orientation, GridDimensions, QRPayload } from '@led-panel/core';
-import { GridService } from '@led-panel/core';
+import type { LEDStyle, Orientation, GridDimensions, SharedQRPayload } from '@led-panel/core';
 
 export interface DirectorState {
   text: string;
@@ -11,21 +10,19 @@ export interface DirectorState {
   speed: number;
   orientation: Orientation;
   grid: GridDimensions;
-  fontSize: number;
-  qrPayloads: QRPayload[];
+  sharedPayload: SharedQRPayload | null;
   startTimeUTC: number;
 }
 
 const DEFAULT_STATE: DirectorState = {
-  text: 'HELLO WORLD 🎉',
+  text: 'HELLO WORLD',
   style: 'dot-matrix',
   textColor: '#FF0000',
   bgColor: '#000000',
   speed: 100,
   orientation: 'landscape',
   grid: { cols: 2, rows: 1 },
-  fontSize: 200,
-  qrPayloads: [],
+  sharedPayload: null,
   startTimeUTC: 0,
 };
 
@@ -33,16 +30,15 @@ export function useDirectorController() {
   const [state, setState] = useState<DirectorState>(DEFAULT_STATE);
 
   const updateField = useCallback(<K extends keyof DirectorState>(key: K, value: DirectorState[K]) => {
-    setState(prev => ({ ...prev, [key]: value, qrPayloads: [] }));
+    setState(prev => ({ ...prev, [key]: value, sharedPayload: null }));
   }, []);
 
-  const generateQRPayloads = useCallback((): QRPayload[] => {
+  const generateSharedPayload = useCallback((): SharedQRPayload => {
     const startTimeUTC = Date.now() + 60000; // placeholder
-    const slots = GridService.generateSlots(state.grid);
     const { width: phoneWidth, height: phoneHeight } = Dimensions.get('window');
 
-    const payloads: QRPayload[] = slots.map(slot => ({
-      v: 1 as const,
+    const payload: SharedQRPayload = {
+      v: 1,
       text: state.text,
       speed: state.speed,
       style: state.style,
@@ -50,26 +46,25 @@ export function useDirectorController() {
       bgColor: state.bgColor,
       orientation: state.orientation,
       grid: state.grid,
-      position: slot.position,
       startTimeUTC,
-      fontSize: state.fontSize,
+      fontSize: Math.round(phoneHeight * 0.9),
       phoneWidth,
       phoneHeight,
-    }));
+    };
 
-    setState(prev => ({ ...prev, qrPayloads: payloads, startTimeUTC }));
-    return payloads;
-  }, [state.text, state.speed, state.style, state.textColor, state.bgColor, state.orientation, state.grid, state.fontSize]);
+    setState(prev => ({ ...prev, sharedPayload: payload, startTimeUTC }));
+    return payload;
+  }, [state.text, state.speed, state.style, state.textColor, state.bgColor, state.orientation, state.grid]);
 
   const setStartTime = useCallback((countdownSeconds: number) => {
     const st = Date.now() + countdownSeconds * 1000;
     setState(prev => ({
       ...prev,
       startTimeUTC: st,
-      qrPayloads: prev.qrPayloads.map(p => ({ ...p, startTimeUTC: st })),
+      sharedPayload: prev.sharedPayload ? { ...prev.sharedPayload, startTimeUTC: st } : null,
     }));
     return st;
   }, []);
 
-  return { state, updateField, generateQRPayloads, setStartTime };
+  return { state, updateField, generateSharedPayload, setStartTime };
 }

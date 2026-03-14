@@ -1,10 +1,10 @@
 import { useEffect, useRef } from 'react';
 import QRCode from 'qrcode';
-import type { QRPayload } from '@led-panel/core';
+import type { SharedQRPayload } from '@led-panel/core';
 import { QRCodecService } from '@led-panel/core';
 
 interface QRCodeDisplayProps {
-  payload: QRPayload;
+  payload: SharedQRPayload;
   size?: number;
   label?: string;
 }

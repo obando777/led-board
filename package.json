@@ -5,6 +5,9 @@
     "dev:web": "turbo run dev --filter=@led-panel/web",
     "dev:expo": "turbo run dev --filter=@led-panel/expo",
     "build": "turbo run build",
+    "build:web": "turbo run build --filter=@led-panel/web",
+    "build:android": "turbo run build --filter=@led-panel/core && cd apps/expo/android && ANDROID_HOME=$HOME/Library/Android/sdk JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home ./gradlew assembleRelease",
+    "build:all": "pnpm build:web && pnpm build:android",
     "lint": "turbo run lint",
     "typecheck": "turbo run typecheck"
   },

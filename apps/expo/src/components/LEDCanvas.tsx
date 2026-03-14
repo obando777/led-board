@@ -84,7 +84,6 @@ export function LEDCanvas({ payload }: LEDCanvasProps) {
   const refWidth = payload.phoneWidth;
   const refHeight = payload.phoneHeight;
   const scaleX = screenWidth / refWidth;
-  const scaleY = screenHeight / refHeight;
 
   const [frame, setFrame] = useState<AnimationFrame>({
     scrollOffsetX: 0,
@@ -93,7 +92,8 @@ export function LEDCanvas({ payload }: LEDCanvasProps) {
     countdownMs: 0,
   });
 
-  const font = useFont(require('../../assets/fonts/CourierNew.ttf'), payload.fontSize);
+  const displayFontSize = Math.round(screenHeight * 0.9);
+  const font = useFont(require('../../assets/fonts/CourierNew.ttf'), displayFontSize);
   const renderConfig = TextLayoutService.buildRenderConfig(
     payload.style,
     payload.textColor,
@@ -110,14 +110,18 @@ export function LEDCanvas({ payload }: LEDCanvasProps) {
   );
   const panel = GridService.computePanelDimensions(payload.grid, refWidth, refHeight);
 
-  // Dot matrix sizing
-  const scale = payload.fontSize / 80;
-  const dotR = Math.max(2, Math.round(4 * scale));
-  const dotSpacing = Math.max(5, Math.round(10 * scale));
-  const charPixelW = (CHAR_W + 1) * dotSpacing;
+  // Derive dot grid from ref height so rendering matches computeDotMatrixTextWidth exactly
+  const refDotSpacing = Math.floor(refHeight / CHAR_H);
+  const scaleY = screenHeight / refHeight;
+  const dotR = Math.max(2, Math.floor(refDotSpacing * Math.min(scaleX, scaleY) * 0.3));
+  const charPixelW = (CHAR_W + 1) * refDotSpacing; // ref coords
 
   const textChars = useMemo(() => [...payload.text], [payload.text]);
-  const totalDotTextWidth = useMemo(() => textChars.length * charPixelW, [textChars, charPixelW]);
+  // Use deterministic calculation from shared ref dimensions so all phones get the same cycle length
+  const totalDotTextWidth = useMemo(
+    () => TextLayoutService.computeDotMatrixTextWidth(payload.text, refHeight),
+    [payload.text, refHeight]
+  );
 
   // Dim color for background dots
   const dimColor = useMemo(() => {
@@ -139,9 +143,10 @@ export function LEDCanvas({ payload }: LEDCanvasProps) {
   useEffect(() => {
     if (payload.style !== 'dot-matrix' && !font) return;
 
+    // Text widths must be deterministic across devices for AnimationService sync
     const textWidth = payload.style === 'dot-matrix'
       ? totalDotTextWidth
-      : (font ? font.measureText(payload.text).width : 0);
+      : (font ? font.measureText(payload.text).width / scaleX : 0);
 
     if (textWidth === 0) return;
 
@@ -163,31 +168,31 @@ export function LEDCanvas({ payload }: LEDCanvasProps) {
     return () => cancelAnimationFrame(raf);
   }, [font, payload, panel.totalWidth, totalDotTextWidth]);
 
-  // Background dots (static grid)
+  // Background dots (static grid) — compute in ref coords, scale to screen
   const bgDots = useMemo(() => {
     if (payload.style !== 'dot-matrix') return [];
     const dots: DotInfo[] = [];
-    const cols = Math.ceil(screenWidth / dotSpacing) + 1;
-    const rows = Math.ceil(screenHeight / dotSpacing) + 1;
-    const offX = (screenWidth % dotSpacing) / 2;
-    const offY = (screenHeight % dotSpacing) / 2;
+    const cols = Math.ceil(refWidth / refDotSpacing) + 1;
+    const rows = Math.ceil(refHeight / refDotSpacing) + 1;
+    const offX = (refWidth % refDotSpacing) / 2;
+    const offY = (refHeight % refDotSpacing) / 2;
     for (let r = 0; r < rows; r++) {
       for (let c = 0; c < cols; c++) {
-        dots.push({ x: offX + c * dotSpacing, y: offY + r * dotSpacing });
+        dots.push({ x: (offX + c * refDotSpacing) * scaleX, y: (offY + r * refDotSpacing) * scaleY });
       }
     }
     return dots;
-  }, [screenWidth, screenHeight, dotSpacing, payload.style]);
+  }, [refWidth, refHeight, refDotSpacing, scaleX, scaleY, payload.style]);
 
-  // Compute lit dot positions in reference coordinates, then scale to screen
-  function getLitDots(chars: string[], scrollX: number): DotInfo[] {
+  // Compute lit dot positions in ref coordinates, then scale to screen
+  function getLitDots(chars: string[], scrollXRef: number): DotInfo[] {
     const dots: DotInfo[] = [];
-    const yCenter = refHeight / 2;
-    const yStart = yCenter - (CHAR_H * dotSpacing) / 2;
+    const yStartRef = (refHeight - CHAR_H * refDotSpacing) / 2;
+    const refViewRight = screenWidth / scaleX; // right edge in ref coords
 
-    let cursorX = scrollX;
+    let cursorX = scrollXRef; // already in ref coords
     for (const ch of chars) {
-      if (cursorX + charPixelW < -dotSpacing || cursorX > refWidth + dotSpacing) {
+      if (cursorX + charPixelW < -refDotSpacing || cursorX > refViewRight + refDotSpacing) {
         cursorX += charPixelW;
         continue;
       }
@@ -200,10 +205,11 @@ export function LEDCanvas({ payload }: LEDCanvasProps) {
         const bits = colData[c];
         for (let r = 0; r < CHAR_H; r++) {
           if (bits & (1 << r)) {
-            const x = cursorX + c * dotSpacing;
-            const y = yStart + (CHAR_H - 1 - r) * dotSpacing;
-            if (x > -dotR * 3 && x < refWidth + dotR * 3) {
-              dots.push({ x: x * scaleX, y: y * scaleY });
+            const xRef = cursorX + c * refDotSpacing;
+            const yRef = yStartRef + (CHAR_H - 1 - r) * refDotSpacing;
+            const xScreen = xRef * scaleX;
+            if (xScreen > -dotR * 3 && xScreen < screenWidth + dotR * 3) {
+              dots.push({ x: xScreen, y: yRef * scaleY });
             }
           }
         }
@@ -227,22 +233,20 @@ export function LEDCanvas({ payload }: LEDCanvasProps) {
       litDots = getLitDots(textChars, frame.scrollOffsetX - slice.offsetX);
     }
 
-    const scaledDotR = dotR * scaleX;
-
     return (
       <Canvas style={{ flex: 1 }}>
         <Fill color={renderConfig.bgColor} />
-        {/* Background dim dots — use actual screen dimensions (decorative) */}
+        {/* Background dim dots */}
         {bgDots.map((d, i) => (
-          <Circle key={`bg${i}`} cx={d.x} cy={d.y} r={scaledDotR * 0.6} color={dimColor} />
+          <Circle key={`bg${i}`} cx={d.x} cy={d.y} r={dotR * 0.4} color={dimColor} />
         ))}
-        {/* Lit dots with glow — already scaled in getLitDots */}
+        {/* Lit dots with glow */}
         {litDots.map((d, i) => (
           <Group key={`lit${i}`}>
-            <Circle cx={d.x} cy={d.y} r={scaledDotR * 2.5} color={glowColor}>
-              <BlurMask blur={scaledDotR * 1.5} style="normal" />
+            <Circle cx={d.x} cy={d.y} r={dotR * 1.5} color={glowColor}>
+              <BlurMask blur={dotR * 0.8} style="normal" />
             </Circle>
-            <Circle cx={d.x} cy={d.y} r={scaledDotR} color={renderConfig.textColor} />
+            <Circle cx={d.x} cy={d.y} r={dotR} color={renderConfig.textColor} />
           </Group>
         ))}
       </Canvas>
@@ -257,15 +261,13 @@ export function LEDCanvas({ payload }: LEDCanvasProps) {
     return (
       <Canvas style={{ flex: 1 }}>
         <Fill color={renderConfig.bgColor} />
-        <Group transform={[{ scaleX }, { scaleY }]}>
-          <SkiaText
-            x={refWidth / 2 - payload.fontSize}
-            y={refHeight / 2 + payload.fontSize / 3}
-            text={String(seconds)}
-            font={font}
-            color={renderConfig.textColor}
-          />
-        </Group>
+        <SkiaText
+          x={screenWidth / 2 - displayFontSize}
+          y={screenHeight / 2 + displayFontSize / 3}
+          text={String(seconds)}
+          font={font}
+          color={renderConfig.textColor}
+        />
       </Canvas>
     );
   }
@@ -273,18 +275,16 @@ export function LEDCanvas({ payload }: LEDCanvasProps) {
   return (
     <Canvas style={{ flex: 1 }}>
       <Fill color={renderConfig.bgColor} />
-      <Group transform={[{ scaleX }, { scaleY }]}>
-        <SkiaText
-          x={frame.scrollOffsetX - slice.offsetX}
-          y={refHeight / 2 + payload.fontSize / 3}
-          text={payload.text}
-          font={font}
-          color={renderConfig.textColor}
-        />
-        {renderConfig.style === 'neon' && (
-          <Shadow dx={0} dy={0} blur={renderConfig.glowRadius} color={renderConfig.textColor} />
-        )}
-      </Group>
+      <SkiaText
+        x={(frame.scrollOffsetX - slice.offsetX) * scaleX}
+        y={screenHeight / 2 + displayFontSize / 3}
+        text={payload.text}
+        font={font}
+        color={renderConfig.textColor}
+      />
+      {renderConfig.style === 'neon' && (
+        <Shadow dx={0} dy={0} blur={renderConfig.glowRadius} color={renderConfig.textColor} />
+      )}
     </Canvas>
   );
 }

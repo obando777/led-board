@@ -12,10 +12,10 @@ const PRESET_COLORS = ['#FF0000', '#00FF00', '#0066FF', '#FF6600', '#FF00FF', '#
 
 export function DirectorSetupView() {
   const navigate = useNavigate();
-  const { state, updateField, generateQRPayloads } = useDirectorController();
+  const { state, updateField, generateSharedPayload } = useDirectorController();
 
   function handleGenerate() {
-    generateQRPayloads(15);
+    generateSharedPayload();
     navigate('/director/qr', { state: { directorState: state } });
   }
 
@@ -102,17 +102,6 @@ export function DirectorSetupView() {
           max={400}
           value={state.speed}
           onChange={e => updateField('speed', Number(e.target.value))}
-          style={styles.slider}
-        />
-
-        {/* Font Size */}
-        <label style={styles.label}>Font Size: {state.fontSize}px</label>
-        <input
-          type="range"
-          min={24}
-          max={120}
-          value={state.fontSize}
-          onChange={e => updateField('fontSize', Number(e.target.value))}
           style={styles.slider}
         />
 

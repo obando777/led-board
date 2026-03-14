@@ -5,8 +5,9 @@
   "main": "expo-router/entry",
   "scripts": {
     "dev": "expo start",
-    "build:ios": "eas build --platform ios",
-    "build:android": "eas build --platform android",
+    "build:android:debug": "JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home cd android && ./gradlew assembleDebug",
+    "build:android:release": "JAVA_HOME=/Library/Java/JavaVirtualMachines/temurin-17.jdk/Contents/Home cd android && ./gradlew assembleRelease",
+    "build:ios": "expo run:ios",
     "typecheck": "tsc --noEmit",
     "android": "expo run:android",
     "ios": "expo run:ios"
@@ -17,6 +18,7 @@
     "@react-native-community/slider": "^4.5.5",
     "@shopify/react-native-skia": "^1.5.0",
     "expo": "~52.0.0",
+    "expo-asset": "~11.0.5",
     "expo-camera": "~16.0.0",
     "expo-constants": "~17.0.8",
     "expo-keep-awake": "~14.0.3",
@@ -36,7 +38,9 @@
     "react-native-svg": "^15.8.0"
   },
   "devDependencies": {
+    "@babel/plugin-proposal-export-namespace-from": "^7.18.9",
     "@types/react": "~18.3.0",
+    "babel-preset-expo": "~12.0.0",
     "typescript": "^5.7.0"
   }
 }

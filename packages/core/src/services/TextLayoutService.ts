@@ -6,6 +6,17 @@ import type { LEDRenderConfig } from '../types';
  */
 export const TextLayoutService = {
   /**
+   * Compute dot-matrix text width deterministically from reference dimensions.
+   * Uses only shared payload values so every device gets the same result.
+   */
+  computeDotMatrixTextWidth(text: string, refHeight: number): number {
+    const CHAR_W = 5;
+    const CHAR_H = 7;
+    const refDotSpacing = Math.floor(refHeight / CHAR_H);
+    return text.length * (CHAR_W + 1) * refDotSpacing;
+  },
+
+  /**
    * Compute the total pixel width of the text at the given font size.
    */
   computeTextWidth(

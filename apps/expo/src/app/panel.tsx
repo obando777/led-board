@@ -50,7 +50,7 @@ export default function PanelScreen() {
     ScreenOrientation.unlockAsync().catch(() => {});
     deactivateKeepAwake();
     NavigationBar.setVisibilityAsync('visible').catch(() => {});
-    router.back();
+    router.replace('/');
   }
 
   if (!payload) {

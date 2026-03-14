@@ -34,7 +34,7 @@ export function LEDCanvas({ payload, width, height }: LEDCanvasProps) {
     const scaleX = width / refWidth;
     const scaleY = height / refHeight;
 
-    // Measure text width using canvas
+    // Use canvas measurement for text width — matches what the renderer actually draws
     ctx.font = `bold ${payload.fontSize}px system-ui, sans-serif`;
     const totalTextWidth = ctx.measureText(payload.text).width;
 

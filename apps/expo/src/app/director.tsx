@@ -14,11 +14,11 @@ const PRESET_COLORS = ['#FF0000', '#00FF00', '#0066FF', '#FF6600', '#FF00FF', '#
 
 export default function DirectorScreen() {
   const router = useRouter();
-  const { state, updateField, generateQRPayloads } = useDirectorController();
+  const { state, updateField, generateSharedPayload } = useDirectorController();
 
   function handleGenerate() {
-    const payloads = generateQRPayloads();
-    router.push({ pathname: '/qr-distribution', params: { payloads: JSON.stringify(payloads) } });
+    const payload = generateSharedPayload();
+    router.push({ pathname: '/qr-distribution', params: { payload: JSON.stringify(payload) } });
   }
 
   return (
@@ -66,19 +66,6 @@ export default function DirectorScreen() {
         step={10}
         value={state.speed}
         onValueChange={v => updateField('speed', v)}
-        minimumTrackTintColor="#4444ff"
-        maximumTrackTintColor="#333"
-        thumbTintColor="#4444ff"
-      />
-
-      <Text style={styles.sectionLabel}>Font Size: {state.fontSize}px</Text>
-      <Slider
-        style={styles.slider}
-        minimumValue={100}
-        maximumValue={300}
-        step={4}
-        value={state.fontSize}
-        onValueChange={v => updateField('fontSize', v)}
         minimumTrackTintColor="#4444ff"
         maximumTrackTintColor="#333"
         thumbTintColor="#4444ff"
