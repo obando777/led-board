@@ -11,7 +11,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.ledpanel.app",
+      "bundleIdentifier": "co.corinthius.ledboard",
       "infoPlist": {
         "NSCameraUsageDescription": "Camera is used to scan QR codes to join an LED panel session."
       }
@@ -21,7 +21,7 @@
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#000000"
       },
-      "package": "com.ledpanel.app",
+      "package": "co.corinthius.ledboard",
       "permissions": ["CAMERA"]
     },
     "plugins": [

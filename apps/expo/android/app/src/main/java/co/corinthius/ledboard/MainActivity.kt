@@ -1,4 +1,4 @@
-package com.ledpanel.app
+package co.corinthius.ledboard
 import expo.modules.splashscreen.SplashScreenManager
 
 import android.os.Build

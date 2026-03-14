@@ -27,7 +27,7 @@
         <category android:name="android.intent.category.DEFAULT"/>
         <category android:name="android.intent.category.BROWSABLE"/>
         <data android:scheme="ledpanel"/>
-        <data android:scheme="com.ledpanel.app"/>
+        <data android:scheme="co.corinthius.ledboard"/>
       </intent-filter>
     </activity>
   </application>

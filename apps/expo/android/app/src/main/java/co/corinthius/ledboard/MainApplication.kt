@@ -1,4 +1,4 @@
-package com.ledpanel.app
+package co.corinthius.ledboard
 
 import android.app.Application
 import android.content.res.Configuration
